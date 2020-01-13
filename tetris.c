@@ -166,8 +166,8 @@ int main() {
                 case KEY_RIGHT: // try to move right
                     dx = c == KEY_LEFT ? -1 : 1;
                     for (int i=0; i<4; i++) {
-                        int new_x = loc.x + fall->points[i].x + dx;
-                        if (new_x<0 || new_x>=COLS || matrix[new_x][loc.y + fall->points[i].y]) {
+                        int x = loc.x + fall->points[i].x + dx, y = loc.y + fall->points[i].y;
+                        if (x<0 || x>=COLS || (y<ROWS && matrix[x][y])) {
                             dx = 0;
                             break;
                         }
@@ -176,6 +176,11 @@ int main() {
                     draw(matrix, loc, fall, hold, next, bag);
                     break;
                 case KEY_UP: // TODO hard drop
+                    while (can_fall(fall, &loc, matrix))
+                            loc.y--;
+                    falling = 0;
+                    lock_start = curr;
+                    lock_start.tv_sec -= 999;
                     break;
                 case KEY_DOWN:
                     soft_dropping = 1;

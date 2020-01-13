@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <sys/time.h>
 #include <ncurses.h>
+#include <math.h>
 #include "tetris.h"
 
 void fill_bag(LinkedPiece **bag) {
@@ -91,10 +92,15 @@ void draw(int matrix[COLS][ROWS], Point loc, Piece *fall, Piece *hold, LinkedPie
     }
 }
 
-long usec_diff(struct timeval *a, struct timeval *b) {
-    return (a->tv_sec-b->tv_sec)*1000000 + a->tv_usec-b->tv_usec;
+long usec(struct timeval *a) {
+    return a->tv_sec*1000000 + a->tv_usec;
 }
 
+long usec_diff(struct timeval *a, struct timeval *b) {
+    return usec(a) - usec(b);
+}
+
+// TODO change this to a void fn which can also perform the action (if legal) and incoporate rotations
 int can_fall(Piece *fall, Point *loc, int matrix[COLS][ROWS]) {
     int x, y;
     for (int i=0; i<4; i++) {
@@ -108,6 +114,12 @@ int can_fall(Piece *fall, Point *loc, int matrix[COLS][ROWS]) {
             return 0;
     }
     return 1;
+}
+
+double speed(int level, int soft_dropping) {
+    if (soft_dropping)
+        return pow(0.8 - level * 0.007, level) / 20.0;
+    return pow(0.8 - level * 0.007, level);
 }
 
 int main() {
@@ -124,7 +136,7 @@ int main() {
     timeout(0);
     keypad(stdscr, TRUE);
 
-    int done = 0;
+    int done = 0, level = 0;
     while (!done) {
         /********************************************/
         /*              GENERATION PHASE            */
@@ -136,10 +148,13 @@ int main() {
         /********************************************/
         /*              FALLING/LOCK PHASE          */
         /********************************************/
-        int c, dx, held = 0, falling = 1, speed = SPEED, tick = 33334;
-        struct timeval prev, curr, lock_start;
-        gettimeofday(&prev, NULL);
-        prev.tv_sec--;
+        int c, dx, held = 0, falling = 1, soft_dropping = 0;
+        struct timeval prev_draw, prev_fall, curr, lock_start, game_start;
+        gettimeofday(&game_start, NULL);
+        prev_fall = game_start;
+        prev_draw = game_start;
+        prev_fall.tv_sec -= 999;
+        prev_draw.tv_sec -= 999;
         while (!done) {
             // deal with inputs
             c = getch();
@@ -162,7 +177,8 @@ int main() {
                     break;
                 case KEY_UP: // TODO hard drop
                     break;
-                case KEY_DOWN: // TODO soft drop
+                case KEY_DOWN:
+                    soft_dropping = 1;
                     break;
                 case 'z': // rotate ccw
                 case 'x': // rotate cw
@@ -184,11 +200,15 @@ int main() {
                     held = 1;
                     draw(matrix, loc, fall, hold, next, bag);
                     break;
+                default:
+                    soft_dropping = 0; // TODO detect key release instead
+                    break;
             }
 
             gettimeofday(&curr, NULL);
-            // lock timer
+
             if (!falling) {
+                // check lock and update lock timer
                 if (usec_diff(&curr, &lock_start) > LOCK_US) {
                     for (int i=0; i<4; i++) {
                         int x = loc.x + fall->points[i].x;
@@ -198,34 +218,37 @@ int main() {
                     fall = NULL;
                     break;
                 }
-                mvprintw(BUFFER-2, 5+COL_SPAWN-1, "%.3f", (LOCK_US-usec_diff(&curr, &lock_start))/1000000.0);
-                refresh();
                 if (can_fall(fall, &loc, matrix))
                     falling = 1;
-                else
-                    continue;
-            }
-            
-            // tick code
-            if (curr.tv_usec-prev.tv_usec + (curr.tv_sec-prev.tv_sec)*1000000 < speed)
-                continue;
-            prev = curr;
-
-            if (can_fall(fall, &loc, matrix))
-                loc.y--;
-            else {
-                falling = 0;
-                gettimeofday(&lock_start, NULL);
             }
 
-            clear();
-            draw(matrix, loc, fall, hold, next, bag);
-            for (int i=0; i<4; i++) {
-                mvprintw(BUFFER+ROWS+1+i, 0, "(%d,%d)", fall->points[i].x, fall->points[i].y);
-                mvprintw(BUFFER+ROWS+1+i, 12, "(%d,%d)", loc.x+fall->points[i].x, loc.y+fall->points[i].y-1);
-                mvprintw(BUFFER+ROWS+1+i, 8, "%d", matrix[loc.x+fall->points[i].x][loc.y+fall->points[i].y-1]);
+            if (falling) { // note: do not use an else as the lock block above can change the value of falling
+                if (usec_diff(&curr, &prev_fall) > 1000000.0*speed(level, soft_dropping)) {
+                    if (can_fall(fall, &loc, matrix)) {
+                        loc.y--;
+                        prev_fall = curr;
+                    } else {
+                        falling = 0;
+                        gettimeofday(&lock_start, NULL);
+                    }
+                }
             }
-            refresh();
+
+            // redraw game screen 
+            if (usec_diff(&curr, &prev_draw) > 1000000.0/FPS) {
+                clear();
+                draw(matrix, loc, fall, hold, next, bag);
+                // TODO ghost
+                for (int i=0; i<4; i++) {
+                    mvprintw(BUFFER+ROWS+1+i, 0, "(%d,%d)", fall->points[i].x, fall->points[i].y);
+                    mvprintw(BUFFER+ROWS+1+i, 12, "(%d,%d)", loc.x+fall->points[i].x, loc.y+fall->points[i].y-1);
+                    mvprintw(BUFFER+ROWS+1+i, 8, "%d", matrix[loc.x+fall->points[i].x][loc.y+fall->points[i].y-1]);
+                }
+                if (!falling)
+                    mvprintw(BUFFER-2, 5+COL_SPAWN-1, "%.3f", (LOCK_US-usec_diff(&curr, &lock_start))/1000000.0);
+                refresh();
+                prev_draw = curr;
+            }
         }
     }
     endwin();

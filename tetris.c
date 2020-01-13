@@ -166,14 +166,14 @@ int main() {
                     if (held)
                         break;
                     if (hold) {
-                        Piece *tmp = hold;
-                        hold = fall;
-                        fall = tmp;
+                        Piece tmp = *hold;
+                        *hold = *fall;
+                        *fall = tmp;
                     } else {
-                        hold = fall;
-                        falling = 0;
-                        fall = NULL;
-                        break;
+                        hold = (Piece*) malloc(sizeof(Piece));
+                        *hold = *fall;
+                        Piece next_piece = pop_next(&next, &bag);
+                        fall = &next_piece;
                     }
                     loc = spawn;
                     held = 1;

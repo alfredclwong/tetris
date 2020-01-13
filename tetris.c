@@ -96,10 +96,15 @@ long usec_diff(struct timeval *a, struct timeval *b) {
 }
 
 int can_fall(Piece *fall, Point *loc, int matrix[COLS][ROWS]) {
+    int x, y;
     for (int i=0; i<4; i++) {
-        if (loc->y + fall->points[i].y - 1 < 0)
+        y = loc->y + fall->points[i].y - 1;
+        if (y > ROWS-1)
+            continue;
+        if (y < 0)
             return 0;
-        if (matrix[loc->x + fall->points[i].x][loc->y + fall->points[i].y - 1])
+        x = loc->x + fall->points[i].x;
+        if (matrix[x][y])
             return 0;
     }
     return 1;
@@ -184,9 +189,16 @@ int main() {
             gettimeofday(&curr, NULL);
             // lock timer
             if (!falling) {
-                if (!fall || usec_diff(&curr, &lock_start) > LOCK_US)
+                if (usec_diff(&curr, &lock_start) > LOCK_US) {
+                    for (int i=0; i<4; i++) {
+                        int x = loc.x + fall->points[i].x;
+                        int y = loc.y + fall->points[i].y;
+                        matrix[x][y] = 1;
+                    }
+                    fall = NULL;
                     break;
-                mvprintw(BUFFER+ROWS-1, 0, "%.3f", (LOCK_US-usec_diff(&curr, &lock_start))/1000000.0);
+                }
+                mvprintw(BUFFER-2, 5+COL_SPAWN-1, "%.3f", (LOCK_US-usec_diff(&curr, &lock_start))/1000000.0);
                 refresh();
                 if (can_fall(fall, &loc, matrix))
                     falling = 1;
@@ -208,13 +220,13 @@ int main() {
 
             clear();
             draw(matrix, loc, fall, hold, next, bag);
-            for (int i=0; i<4; i++)
-                mvprintw(BUFFER+ROWS+i, 0, "(%d,%d)", fall->points[i].x, fall->points[i].y);
+            for (int i=0; i<4; i++) {
+                mvprintw(BUFFER+ROWS+1+i, 0, "(%d,%d)", fall->points[i].x, fall->points[i].y);
+                mvprintw(BUFFER+ROWS+1+i, 12, "(%d,%d)", loc.x+fall->points[i].x, loc.y+fall->points[i].y-1);
+                mvprintw(BUFFER+ROWS+1+i, 8, "%d", matrix[loc.x+fall->points[i].x][loc.y+fall->points[i].y-1]);
+            }
             refresh();
         }
-        for (int i=0; i<4; i++)
-            ;//matrix[loc.x + fall->points[i].x][loc.y + fall->points[i].y] = 1;
-        fall = NULL;
     }
     endwin();
 }

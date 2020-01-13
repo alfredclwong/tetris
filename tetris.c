@@ -256,8 +256,8 @@ int main() {
                         int y = loc.y + fall->points[i].y;
                         matrix[x][y] = 1;
                     }
-                    fall = NULL;
-                    break;
+                    //fall = NULL;
+                    break; /* EXIT POINT */
                 }
                 if (can_fall(fall, &loc, matrix))
                     falling = 1;
@@ -290,6 +290,35 @@ int main() {
                 prev_draw = curr;
             }
         }
+        
+        /********************************************/
+        /*          PATTERN/ELIMINATION PHASE       */
+        /********************************************/
+        // pattern
+        int lines[4] = {-1}, n_lines = 0;
+        for (int y=0; y<ROWS; y++) {
+            int complete = 1;
+            for (int x=0; x<COLS; x++) {
+                if (matrix[x][y] == 0) {
+                    complete = 0;
+                    break;
+                }
+            }
+            if (complete) {
+                lines[n_lines++] = y;
+            }
+        }
+
+        // elimination
+        for (int i=0; i<n_lines; i++) {
+            for (int y=lines[i]-i; y<ROWS-1; y++)
+                for (int x=0; x<COLS; x++)
+                    matrix[x][y] = matrix[x][y+1];
+            for (int x=0; x<COLS; x++)
+                matrix[x][ROWS-1] = 0;
+        }
+
+        fall = NULL;
     }
     endwin();
 }

@@ -11,6 +11,7 @@ void fill_bag(LinkedPiece **bag) {
     int perm[NUM_PIECES];
     for (int i=0; i<NUM_PIECES; i++)
         perm[i] = i;
+
     for (int i=0; i<NUM_PIECES; i++) {
         int j, tmp;
         j = rand() % (NUM_PIECES-i) + i;
@@ -22,12 +23,13 @@ void fill_bag(LinkedPiece **bag) {
     // fill bag according to perm
     *bag = (LinkedPiece*) malloc(sizeof(LinkedPiece));
     LinkedPiece *end = *bag;
-    for (int i=0; i<NUM_PIECES; i++) {
+    for (int i=0; i<NUM_PIECES-1; i++) {
         end->piece = PIECES[perm[i]];
         end->next = (LinkedPiece*) malloc(sizeof(LinkedPiece));
         end = end->next;
     }
-    end = NULL;
+    end->piece = PIECES[perm[NUM_PIECES-1]];
+    end->next = NULL;
 }
 
 Piece pop_next(LinkedPiece **next, LinkedPiece **bag) {
@@ -38,11 +40,11 @@ Piece pop_next(LinkedPiece **next, LinkedPiece **bag) {
     // edge case: first game loop has empty next
     if (*next == NULL) {
         *next = *bag;
+        LinkedPiece *end = *next;
         for (int i=0; i<NEXT-1; i++)
-            *bag = (*bag)->next;
-        LinkedPiece *tmp = (*bag)->next;
-        (*bag)->next = NULL;
-        *bag = tmp;
+            end = end->next;
+        *bag = end->next;
+        end->next = NULL;
     }
 
     // pop from next for retval, pop from bag for next next
@@ -70,21 +72,21 @@ void draw(int matrix[COLS][ROWS], Point loc, Piece *fall, Piece *hold, LinkedPie
     LinkedPiece *end = next;
     for (int i=0; end; i++) {
         for (int j=0; j<4; j++)
-            mvprintw(BUFFER+i*3+1+end->piece.points[j].y, 5+COLS+2+end->piece.points[j].x, "1");
+            mvprintw(BUFFER+i*3+1-end->piece.points[j].y, 5+COLS+2+end->piece.points[j].x, "1");
         end = end->next;
     }
     // draw hold
     mvprintw(BUFFER-2, 0, "HOLD");
     if (hold != NULL) {
         for (int i=0; i<4; i++)
-            mvprintw(BUFFER+1+hold->points[i].y, 1+hold->points[i].x, "1");
+            mvprintw(BUFFER+1-hold->points[i].y, 1+hold->points[i].x, "1");
     }
     // draw bag
     mvprintw(BUFFER-2, 5+COLS+1+5, "BAG");
     end = bag;
     for (int i=0; end; i++) {
         for (int j=0; j<4; j++)
-            mvprintw(BUFFER+i*3+1+end->piece.points[j].y, 5+COLS+2+5+end->piece.points[j].x, "1");
+            mvprintw(BUFFER+i*3+1-end->piece.points[j].y, 5+COLS+2+5+end->piece.points[j].x, "1");
         end = end->next;
     }
 }
@@ -169,8 +171,9 @@ int main() {
                         fall = tmp;
                     } else {
                         hold = fall;
-                        Piece next_piece = pop_next(&next, &bag);
-                        fall = &next_piece;
+                        falling = 0;
+                        fall = NULL;
+                        break;
                     }
                     loc = spawn;
                     held = 1;
@@ -181,7 +184,7 @@ int main() {
             gettimeofday(&curr, NULL);
             // lock timer
             if (!falling) {
-                if (usec_diff(&curr, &lock_start) < LOCK_US)
+                if (!fall || usec_diff(&curr, &lock_start) > LOCK_US)
                     break;
                 mvprintw(BUFFER+ROWS-1, 0, "%.3f", (LOCK_US-usec_diff(&curr, &lock_start))/1000000.0);
                 refresh();
@@ -210,7 +213,7 @@ int main() {
             refresh();
         }
         for (int i=0; i<4; i++)
-            matrix[loc.x + fall->points[i].x][loc.y + fall->points[i].y] = 1;
+            ;//matrix[loc.x + fall->points[i].x][loc.y + fall->points[i].y] = 1;
         fall = NULL;
     }
     endwin();

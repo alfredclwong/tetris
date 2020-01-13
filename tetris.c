@@ -60,11 +60,73 @@ Piece pop_next(LinkedPiece **next, LinkedPiece **bag) {
     return next_piece;
 }
 
+long usec(struct timeval *a) {
+    return a->tv_sec*1000000 + a->tv_usec;
+}
+
+long usec_diff(struct timeval *a, struct timeval *b) {
+    return usec(a) - usec(b);
+}
+
+// TODO change this to a void fn which can also perform the action (if legal) and incoporate rotations
+int can_fall(Piece *fall, Point *loc, int matrix[COLS][ROWS]) {
+    int x, y;
+    for (int i=0; i<4; i++) {
+        y = loc->y + fall->points[i].y - 1;
+        if (y > ROWS-1)
+            continue;
+        if (y < 0)
+            return 0;
+        x = loc->x + fall->points[i].x;
+        if (matrix[x][y])
+            return 0;
+    }
+    return 1;
+}
+
+void rotate(Piece *fall, int direction) { // direciton: 1 => ccw, -1 => cw
+    int *x, *y, old_x;
+    for (int i=0; i<4; i++) {
+        x = &(fall->points[i].x);
+        y = &(fall->points[i].y);
+        old_x = fall->points[i].x;
+        *x = -direction * (*y);
+        *y = +direction * old_x;
+    }
+}
+
+int can_rotate(Piece *fall, Point *loc, int matrix[COLS][ROWS], int direction) {
+    int x, y;
+    Piece tmp = *fall;
+    rotate(&tmp, direction);
+    for (int i=0; i<4; i++) {
+        x = loc->x + tmp.points[i].x;
+        y = loc->y + tmp.points[i].y;
+        if (y < 0 || x < 0 || x >= COLS || matrix[x][y])
+            return 0;
+    }
+    return 1;
+}
+
+double speed(int level, int soft_dropping) {
+    if (soft_dropping)
+        return pow(0.8 - level * 0.007, level) / 20.0;
+    return pow(0.8 - level * 0.007, level);
+}
+
 void draw(int matrix[COLS][ROWS], Point loc, Piece *fall, Piece *hold, LinkedPiece *next, LinkedPiece *bag) {
     // draw matrix
     for (int x=0; x<COLS; x++)
         for (int y=0; y<ROWS; y++)
-            mvprintw(BUFFER+ROWS-1-y, 5+x, "%d", matrix[x][y]);
+            if (matrix[x][y])
+                mvprintw(BUFFER+ROWS-1-y, 5+x, "%d", matrix[x][y]);
+    // draw ghost (before fall)
+    Point ghost_loc = loc;
+    while (can_fall(fall, &ghost_loc, matrix))
+        ghost_loc.y--;
+    for (int i=0; i<4; i++) {
+        mvprintw(BUFFER+ROWS-1-(ghost_loc.y+fall->points[i].y), 5+ghost_loc.x+fall->points[i].x, "*");
+    }
     // draw fall
     for (int i=0; i<4; i++)
         mvprintw(BUFFER+ROWS-1-(loc.y+fall->points[i].y), 5+loc.x+fall->points[i].x, "1");
@@ -92,42 +154,12 @@ void draw(int matrix[COLS][ROWS], Point loc, Piece *fall, Piece *hold, LinkedPie
     }
 }
 
-long usec(struct timeval *a) {
-    return a->tv_sec*1000000 + a->tv_usec;
-}
-
-long usec_diff(struct timeval *a, struct timeval *b) {
-    return usec(a) - usec(b);
-}
-
-// TODO change this to a void fn which can also perform the action (if legal) and incoporate rotations
-int can_fall(Piece *fall, Point *loc, int matrix[COLS][ROWS]) {
-    int x, y;
-    for (int i=0; i<4; i++) {
-        y = loc->y + fall->points[i].y - 1;
-        if (y > ROWS-1)
-            continue;
-        if (y < 0)
-            return 0;
-        x = loc->x + fall->points[i].x;
-        if (matrix[x][y])
-            return 0;
-    }
-    return 1;
-}
-
-double speed(int level, int soft_dropping) {
-    if (soft_dropping)
-        return pow(0.8 - level * 0.007, level) / 20.0;
-    return pow(0.8 - level * 0.007, level);
-}
-
 int main() {
     srand(time(NULL));
 
     int matrix[COLS][ROWS] = {{0}};
     Point loc, spawn = {COL_SPAWN, ROW_SPAWN};
-    Piece *fall = NULL, *ghost = NULL, *hold = NULL;
+    Piece *fall = NULL, *hold = NULL;
     LinkedPiece *next = NULL, *bag = NULL;
 
     initscr();
@@ -148,7 +180,7 @@ int main() {
         /********************************************/
         /*              FALLING/LOCK PHASE          */
         /********************************************/
-        int c, dx, held = 0, falling = 1, soft_dropping = 0;
+        int c, held = 0, falling = 1, soft_dropping = 0;
         struct timeval prev_draw, prev_fall, curr, lock_start, game_start;
         gettimeofday(&game_start, NULL);
         prev_fall = game_start;
@@ -159,11 +191,12 @@ int main() {
             // deal with inputs
             c = getch();
             switch (c) {
+                int dx, direction;
                 case 'q':
                     done = 1;
                     continue;
-                case KEY_LEFT: // try to move left
-                case KEY_RIGHT: // try to move right
+                case KEY_LEFT: // move left
+                case KEY_RIGHT: // move right
                     dx = c == KEY_LEFT ? -1 : 1;
                     for (int i=0; i<4; i++) {
                         int x = loc.x + fall->points[i].x + dx, y = loc.y + fall->points[i].y;
@@ -187,6 +220,9 @@ int main() {
                     break;
                 case 'z': // rotate ccw
                 case 'x': // rotate cw
+                    direction = c == 'z' ? 1 : -1;
+                    if (can_rotate(fall, &loc, matrix, direction))
+                        rotate(fall, direction);
                     break;
                 case 'c': // hold
                     if (held)
@@ -243,7 +279,6 @@ int main() {
             if (usec_diff(&curr, &prev_draw) > 1000000.0/FPS) {
                 clear();
                 draw(matrix, loc, fall, hold, next, bag);
-                // TODO ghost
                 for (int i=0; i<4; i++) {
                     mvprintw(BUFFER+ROWS+1+i, 0, "(%d,%d)", fall->points[i].x, fall->points[i].y);
                     mvprintw(BUFFER+ROWS+1+i, 12, "(%d,%d)", loc.x+fall->points[i].x, loc.y+fall->points[i].y-1);

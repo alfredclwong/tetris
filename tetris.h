@@ -1,7 +1,7 @@
 #define COLS 10
 #define ROWS 20
 #define BUFFER 4
-#define SPEED 200000
+#define SPEED 100000
 #define LOCK_US 500000
 #define NEXT 4
 #define NUM_PIECES 7
@@ -26,11 +26,11 @@ struct LinkedPiece {
 };
 
 static const Piece PIECES[7] = {
-    { .points = {{ 0,  0}, { 0,  1}, { 1,  0}, { 1,  1}} }, // O
-    { .points = {{-1,  0}, { 0,  0}, { 1,  0}, { 2,  0}} }, // I
-    { .points = {{-1,  0}, { 0,  0}, { 1,  0}, { 0,  1}} }, // T
-    { .points = {{-1,  0}, { 0,  0}, { 1,  0}, { 1,  1}} }, // L
     { .points = {{-1,  0}, { 0,  0}, { 1,  0}, {-1,  1}} }, // J
-    { .points = {{-1,  0}, { 0,  0}, { 0,  1}, { 1,  1}} }, // S
+    { .points = {{-1,  0}, { 0,  0}, { 1,  0}, { 2,  0}} }, // I
     { .points = {{ 0,  0}, { 1,  0}, {-1,  1}, { 0,  1}} }, // Z
+    { .points = {{-1,  0}, { 0,  0}, { 1,  0}, { 1,  1}} }, // L
+    { .points = {{-1,  0}, { 0,  0}, { 1,  0}, { 0,  1}} }, // T
+    { .points = {{ 0,  0}, { 0,  1}, { 1,  0}, { 1,  1}} }, // O
+    { .points = {{-1,  0}, { 0,  0}, { 0,  1}, { 1,  1}} }, // S
 };

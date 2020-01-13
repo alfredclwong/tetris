@@ -1,7 +1,8 @@
 #define COLS 10
 #define ROWS 20
 #define BUFFER 4
-#define LOCK_DOWN_MS 500
+#define SPEED 200000
+#define LOCK_US 500000
 #define NEXT 4
 #define NUM_PIECES 7
 #define COL_SPAWN 4 // spawn on 4th (-1) to 7th (2) cols
